@@ -168,17 +168,28 @@ def test_invalid_base_fails_before_loading_and_closes_worker(tmp_path, base_conf
     ]
 
 
-def test_load_preserves_engine_options_and_image_size(ckpt):  # noqa: F811
+@pytest.mark.parametrize("image_long_side", [None, 96])
+def test_load_preserves_engine_options_and_image_size(ckpt, image_long_side):  # noqa: F811
     config = VisionEngineConfig(
-        device="mlx", model_name="custom", max_batch=2, use_prefix_cache=False
+        device="mlx",
+        model_name="custom",
+        max_batch=2,
+        use_prefix_cache=False,
+        image_long_side=64,
+        max_images=1,
+        max_image_pixels=256 * 256,
     )
-    engine = load_vision_engine(ckpt, config, image_long_side=96)
+    engine = load_vision_engine(ckpt, config, image_long_side=image_long_side)
     try:
         assert engine.cfg.model_name == "custom"
         assert engine.cfg.max_batch == 2
         assert engine.cfg.use_prefix_cache is False
-        assert engine.vcfg.image_long_side == 96
+        assert engine.vcfg.image_long_side == (64 if image_long_side is None else image_long_side)
         request = SystemOneRequest(state="", questions=QUESTIONS, images=[_b64(192, 192, 0)])
         assert engine.evaluate(request).model == "custom"
+        with pytest.raises(ValueError, match="at most 1"):
+            engine.evaluate(request.model_copy(update={"images": [_b64(32, 32, 0)] * 2}))
+        with pytest.raises(ValueError, match="pixels are accepted"):
+            engine.evaluate(request.model_copy(update={"images": [_b64(257, 256, 0)]}))
     finally:
         engine.close()

@@ -25,7 +25,7 @@ import io
 import os
 import re
 from collections.abc import Sequence
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -562,7 +562,7 @@ def load_vision_engine(
     config: EngineConfig | None = None,
     *,
     attn_implementation: str | None = None,
-    image_long_side: int = 448,
+    image_long_side: int | None = None,
 ) -> VisionEngine:
     """A vision engine configured as `create_app` configures a text one (device, prefix
     cache, `max_batch`, model name), plus the image settings."""
@@ -584,9 +584,9 @@ def load_vision_engine(
                 ) from exc
             raise
         return load_mlx_vision_engine(checkpoint, base, image_long_side=image_long_side)
-    names = {f.name for f in fields(EngineConfig)}
-    cfg = VisionEngineConfig(
-        **{k: v for k, v in asdict(base).items() if k in names}, image_long_side=image_long_side
-    )
+    settings = asdict(config or VisionEngineConfig())
+    if image_long_side is not None:
+        settings["image_long_side"] = image_long_side
+    cfg = VisionEngineConfig(**settings)
     model = VisionDeciderModel.load(checkpoint, attn_implementation=attn_implementation)
     return VisionEngine(model, cfg)

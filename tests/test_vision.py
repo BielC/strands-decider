@@ -462,6 +462,24 @@ def test_load_vision_engine_keeps_the_server_settings(ckpt):
     assert (eng.cfg.max_batch, eng.cfg.model_name) == (3, "vd-test")
 
 
+@pytest.mark.parametrize("image_long_side", [None, 96])
+def test_load_vision_engine_keeps_image_limits(ckpt, image_long_side):
+    eng = load_vision_engine(
+        ckpt,
+        VisionEngineConfig(
+            device="cpu", max_images=1, max_image_pixels=256 * 256, image_long_side=64
+        ),
+        image_long_side=image_long_side,
+    )
+    assert eng.vcfg.image_long_side == (64 if image_long_side is None else image_long_side)
+    request = SystemOneRequest(state="", questions=QUESTIONS, images=[_b64(192, 192, 0)])
+    eng.evaluate(request)
+    with pytest.raises(ValueError, match="at most 1"):
+        eng.evaluate(request.model_copy(update={"images": [_b64(32, 32, 0)] * 2}))
+    with pytest.raises(ValueError, match="pixels are accepted"):
+        eng.evaluate(request.model_copy(update={"images": [_b64(257, 256, 0)]}))
+
+
 def test_mlx_vision_requires_apple_silicon(monkeypatch):
     monkeypatch.setattr("strands_decider.infer.mlx_available", lambda: False)
     with pytest.raises(RuntimeError, match="Apple silicon"):

@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, fields, replace
+from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -119,7 +119,7 @@ class MLXVisionEngine(MLXEngine, VisionEngine):
 
 
 def load_mlx_vision_engine(
-    checkpoint: str, config: EngineConfig | None = None, *, image_long_side: int = 448
+    checkpoint: str, config: EngineConfig | None = None, *, image_long_side: int | None = None
 ) -> MLXVisionEngine:
     """Load and run on one Metal-owning thread, as the text MLX engine does."""
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mlx-vision")
@@ -133,7 +133,7 @@ def load_mlx_vision_engine(
 def _load(
     checkpoint: str,
     config: EngineConfig | None,
-    image_long_side: int,
+    image_long_side: int | None,
     executor: ThreadPoolExecutor,
 ) -> MLXVisionEngine:
     path = checkpoint_dir(checkpoint)
@@ -171,12 +171,11 @@ def _load(
     head = build_head(cfg, int(decoder.embed_tokens.weight.shape[1]))
     head.load_state_dict(load_head_state(path))
     head.to(torch.float32).eval()
-    names = {f.name for f in fields(EngineConfig)}
-    base_config = replace(config or EngineConfig(), device="mlx")
-    vcfg = VisionEngineConfig(
-        **{k: v for k, v in asdict(base_config).items() if k in names},
-        image_long_side=image_long_side,
-    )
+    settings = asdict(config or VisionEngineConfig())
+    settings["device"] = "mlx"
+    if image_long_side is not None:
+        settings["image_long_side"] = image_long_side
+    vcfg = VisionEngineConfig(**settings)
     engine = MLXVisionEngine(decoder, vlm.language_model, _Readout(cfg, tok, head), vcfg, executor)
     engine.vlm = vlm
     engine.vcfg = vcfg
