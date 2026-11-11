@@ -14,6 +14,7 @@ import base64
 import gc
 import io
 import json
+import math
 import platform
 import statistics
 import time
@@ -117,6 +118,9 @@ def compare(reference: dict, actual: dict) -> dict:
         assert response["usage"] == other["usage"], f"{name}: token counts differ"
         for question, answer in response["answers"].items():
             p, q = probabilities(answer), probabilities(other["answers"][question])
+            for side, values in [("reference", p), ("actual", q)]:
+                if not all(math.isfinite(value) for value in values.values()):
+                    raise ValueError(f"{name}/{question}: {side} probabilities must be finite")
             largest = max(largest, max(abs(p[k] - q[k]) for k in p))
             changed += max(p, key=p.get) != max(q, key=q.get)
             total += 1
