@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -97,6 +98,33 @@ def test_shared_prefix_and_batching_match_full_forward(vision_engines):
                 assert actual[name] == pytest.approx(expected[name], abs=2e-4)
     finally:
         mlx.cfg = original
+
+
+@pytest.mark.parametrize("dtype", ["bfloat16", "float16"])
+@pytest.mark.parametrize("multiple_questions", [False, True])
+def test_low_precision_images_match_torch(ckpt, tmp_path, dtype, multiple_questions):  # noqa: F811
+    checkpoint = shutil.copytree(ckpt, tmp_path / "checkpoint")
+    config_path = checkpoint / "strands_decider_config.json"
+    config = StrandsDeciderConfig.from_json(config_path)
+    config.torch_dtype = dtype
+    config_path.write_text(config.to_json())
+    torch = load_vision_engine(str(checkpoint), EngineConfig(device="cpu"))
+    mlx = load_vision_engine(str(checkpoint), EngineConfig(device="mlx"))
+    request = SystemOneRequest(
+        state=STATE,
+        questions=QUESTIONS if multiple_questions else {"signed": QUESTIONS["signed"]},
+        images=[_b64(256, 128, 4), _b64(128, 256, 5)],
+    )
+    try:
+        expected = _probabilities(torch.evaluate(request))
+        for shared in [True, False]:
+            mlx.cfg = replace(mlx.cfg, use_prefix_cache=shared)
+            actual = _probabilities(mlx.evaluate(request))
+            for name in expected:
+                # CPU upcasts the torso; MLX also rounds the merged adapter to the torso dtype.
+                assert actual[name] == pytest.approx(expected[name], abs=3e-3), name
+    finally:
+        mlx.close()
 
 
 def test_mixed_requests_from_other_threads_match_serial(vision_engines):

@@ -80,9 +80,9 @@ class MLXVisionEngine(MLXEngine, VisionEngine):
         # Image patches occupy fewer rotary positions than their number of tokens.
         suffix_pos = mx.arange(n, n + width) + features.rope_deltas.reshape(-1, 1)
         suffix_pos = mx.broadcast_to(suffix_pos[None], (3, batch, width))
-        cache = make_prompt_cache(self._cache_owner)
         shared = self.cfg.use_prefix_cache and batch > 1
         if shared:
+            cache = make_prompt_cache(self._cache_owner)
             prefix = self._decoder(
                 ids,
                 inputs_embeds=features.inputs_embeds,
@@ -103,9 +103,7 @@ class MLXVisionEngine(MLXEngine, VisionEngine):
                 [mx.broadcast_to(features.position_ids, (3, batch, n)), suffix_pos], axis=-1
             )
             full_ids = mx.concatenate([mx.broadcast_to(ids, (batch, n)), suffix], axis=1)
-            hidden = self._decoder(
-                full_ids, inputs_embeds=embeds, position_ids=positions, cache=cache
-            )
+            hidden = self._decoder(full_ids, inputs_embeds=embeds, position_ids=positions)
             base = n
             tokens = batch * n + sum(map(len, q))
         mx.eval(hidden)
