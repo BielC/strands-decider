@@ -567,6 +567,23 @@ def load_vision_engine(
     """A vision engine configured as `create_app` configures a text one (device, prefix
     cache, `max_batch`, model name), plus the image settings."""
     base = config or EngineConfig()
+    if base.device == "mlx":
+        from .infer import mlx_available
+
+        if not mlx_available():
+            raise RuntimeError(
+                "MLX image input needs Apple silicon and strands-decider[mlx-vision]"
+            )
+        _check_transformers()
+        try:
+            from .mlx_vision import load_mlx_vision_engine
+        except ModuleNotFoundError as exc:
+            if exc.name == "mlx_vlm":
+                raise RuntimeError(
+                    "MLX image input needs pip install 'strands-decider[mlx-vision]'"
+                ) from exc
+            raise
+        return load_mlx_vision_engine(checkpoint, base, image_long_side=image_long_side)
     names = {f.name for f in fields(EngineConfig)}
     cfg = VisionEngineConfig(
         **{k: v for k, v in asdict(base).items() if k in names}, image_long_side=image_long_side

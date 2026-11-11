@@ -42,6 +42,12 @@ mlx = [
     "mlx>=0.32.2; python_version >= '3.11' and sys_platform == 'darwin' and platform_machine == 'arm64'",
     "mlx-lm>=0.32,<0.33; python_version >= '3.11' and sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
+# Qwen3.5 image input on MLX. Pin the tested MLX-VLM layout and M-RoPE/cache API.
+mlx-vision = [
+    "strands-decider[mlx,vision]",
+    "transformers>=5.18,<6",
+    "mlx-vlm==0.7.12; python_version >= '3.11' and sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
 # `--device cuda`: flash-linear-attention's Triton kernels for the Gated DeltaNet layers. The conv
 # layer's kernel, causal-conv1d, compiles against the local CUDA toolkit and is not listed; on a
 # machine with nvcc: pip install causal-conv1d --no-build-isolation.
@@ -131,6 +137,7 @@ module = [
     "yaml",
     "mlx.*",
     "mlx_lm.*",
+    "mlx_vlm.*",
     "PIL.*",
     "tokenizers",
 ]

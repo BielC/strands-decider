@@ -14,6 +14,23 @@ pip install "strands-decider[vision]"     # Pillow; needs transformers >= 5.18
 strands-decider serve StrandsAgents/strands-decider-2B-qwen3.5-v1-2610 --vision --port 8000
 ```
 
+On Apple silicon with Python 3.11+, the Qwen3.5 image path also runs on MLX:
+
+```bash
+pip install -e ".[mlx-vision]"  # from a checkout until the next package release
+strands-decider serve StrandsAgents/strands-decider-2B-qwen3.5-v1-2610 \
+  --vision --device mlx --port 8000
+strands-decider ask StrandsAgents/strands-decider-2B-qwen3.5-v1-2610 \
+  --device mlx --image page.png --state "" --noul "Is a payment error visible?"
+```
+
+`mlx-vision` adds the tested MLX-VLM version to the `mlx` and `vision` extras. It loads
+the original unquantised Qwen3.5 base at the checkpoint's pinned revision and folds in
+the released LoRA adapter; no converted model or retraining is needed. The vision tower
+and decoder run on Metal; the checkpoint's calibrated fp32 pointer head runs on CPU.
+Other architectures and quantised bases are refused. The ordinary `vision` install
+keeps its torch backend and dependencies.
+
 A request adds `images`: a list of base64 images, PNG, JPEG, WebP or GIF (a
 `data:image/...;base64,` prefix is accepted). The state may be empty.
 
@@ -88,6 +105,49 @@ Checks (`tests/test_vision.py`, offline, on a tiny random-weight Qwen3.5 with a 
 one and two images the shared-prefix path matches a plain full forward to under 1e-5; no
 position state leaks into the next request; the window and decoding rules above. Each
 test fails when the fix it pins is removed.
+
+`tests/test_mlx_vision.py` checks the same image inputs against torch on a tiny offline
+checkpoint, including one and several questions, asymmetric/multiple images, prefix
+caching, batching, mixed text/image requests, concurrent callers and server shutdown.
+Both loading and inference run on one dedicated MLX worker thread. Each request supplies
+its own explicit rotary positions and caches, so an image cannot change the next request's
+text positions. The pixel processor, limits, option positions, temperatures and readout
+are shared with the existing engines. MLX folds the LoRA weights into the base, so bf16
+results can differ from torch's unmerged adapter ([MLX precision](inference.md#serving-on-a-mac-with-mlx)).
+
+For a released checkpoint, compare answers and warm end-to-end latency with generated,
+non-private images (this measures backend agreement, not image-task accuracy):
+
+```bash
+python evaluation/vision/device_parity.py CHECKPOINT --device mps --device mlx \
+  --reps 5 --out report-vision-parity.json
+```
+
+### Qwen3.5 v1 on MLX
+
+Measured on an M4 Max with 36 GB RAM, macOS 27.2, Python 3.12.12, torch 2.15.0,
+transformers 5.22.2, MLX 0.32.4, mlx-lm 0.32.2 and MLX-VLM 0.7.12. The v1 checkpoint
+was pinned to `216d1ccb46a9e9b036eb9187b248db98480f77d4`, its Qwen3.5-2B-Base to
+`b1485b2fa6dfa1287294f269f5fb618e03d52d7c`; both GPU backends used bf16.
+
+The script above generates six image cases (red/blue shapes, small, square and two
+asymmetric images), each with one or three questions, plus a text request after the
+images: 27 answers. There were no selected-answer changes against MPS or the fp32 CPU
+reference. Maximum absolute probability differences were 0.0289 against MPS and 0.0236
+against CPU. This is a small implementation check, not a vision accuracy benchmark.
+
+Warm request latency, five timed runs after one warmup for each shape. Each cell is the
+range of per-request medians over the six image cases, including PIL preprocessing,
+tokenisation and readout:
+
+| Questions | MPS | MLX |
+| --- | --- | --- |
+| 1 | 224-341 ms | 89-180 ms |
+| 3 | 285-403 ms | 140-239 ms |
+
+The median paired speedup across those twelve requests was 1.90x. These measurements
+use generated shapes and the default 448 px limit; they do not establish screenshot
+judgment quality or laptop power consumption.
 
 ## How well it does
 

@@ -185,6 +185,10 @@ strands-decider ask StrandsAgents/strands-decider-2B-qwen3.5-v1-2610 --state "" 
   --noul "Is the signature block filled in?"
 ```
 
+On Apple silicon (Python 3.11+), install `pip install -e ".[mlx-vision]"` from a clone
+and add `--device mlx` to either image command. This keeps image preprocessing and the
+fp32 decision head unchanged while running the vision tower and decoder through MLX.
+
 v19 matches an image-trained 2B decider on accuracy, and on NaturalBench is much better
 calibrated (ECE 0.014 against 0.080). v21 has v19's image accuracy, is better calibrated on
 POPE, and is more confident than v19 when the image is missing. v1 has v21's image accuracy;

@@ -96,8 +96,6 @@ def create_app(
 ) -> FastAPI:
     if device_map and (vision or not device.startswith("cuda")):
         raise ValueError("--device-map splits the text torso across CUDA GPUs: use it with cuda")
-    if vision and device == "mlx":
-        raise ValueError("--vision runs on torch devices (cuda, mps, cpu), not mlx")
     if max_concurrency is not None and max_concurrency < 1:
         raise ValueError("--max-concurrency must be at least 1")
 

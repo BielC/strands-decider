@@ -78,6 +78,9 @@ function, so only the first fallback matters there, and it costs 32 ms a forward
 runs the torso on Metal through mlx-lm ([Serving on a Mac with MLX](#serving-on-a-mac-with-mlx)).
 MLX is opt-in: with the extra installed, a command without `--device` still runs on MPS.
 
+For Qwen3.5 image inputs, install `.[mlx-vision]` and use `--vision --device mlx`
+([Images](vision.md#using-it)); `ask --image` also accepts `--device mlx`.
+
 ```bash
 pip install -e ".[dev,mlx]"
 strands-decider serve checkpoints/hobson-2b-recipe --device mlx --port 8099

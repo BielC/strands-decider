@@ -116,7 +116,8 @@ def base_dir(tmp_path_factory):
             "layer_types": ["linear_attention"] * 3 + ["full_attention"],
             "linear_num_key_heads": 4,
             "linear_num_value_heads": 4,
-            "linear_key_head_dim": 16,
+            # Also exercised on Metal: its Gated DeltaNet kernel needs at least 32 lanes.
+            "linear_key_head_dim": 32,
             "linear_value_head_dim": 16,
             "linear_conv_kernel_dim": 4,
             "attn_output_gate": True,
@@ -459,6 +460,28 @@ def test_image_only_request_and_refusals(engines):
 def test_load_vision_engine_keeps_the_server_settings(ckpt):
     eng = load_vision_engine(ckpt, EngineConfig(device="cpu", max_batch=3, model_name="vd-test"))
     assert (eng.cfg.max_batch, eng.cfg.model_name) == (3, "vd-test")
+
+
+def test_mlx_vision_requires_apple_silicon(monkeypatch):
+    monkeypatch.setattr("strands_decider.infer.mlx_available", lambda: False)
+    with pytest.raises(RuntimeError, match="Apple silicon"):
+        load_vision_engine("unused", EngineConfig(device="mlx"))
+
+
+def test_mlx_vision_missing_extra_has_install_hint(monkeypatch):
+    import builtins
+
+    original = builtins.__import__
+
+    def without_vlm(name, *args, **kwargs):
+        if name == "mlx_vision":
+            raise ModuleNotFoundError("No module named 'mlx_vlm'", name="mlx_vlm")
+        return original(name, *args, **kwargs)
+
+    monkeypatch.setattr("strands_decider.infer.mlx_available", lambda: True)
+    monkeypatch.setattr(builtins, "__import__", without_vlm)
+    with pytest.raises(RuntimeError, match=r"pip install 'strands-decider\[mlx-vision\]'"):
+        load_vision_engine("unused", EngineConfig(device="mlx"))
 
 
 def test_server_routes_images(ckpt):
